@@ -31,7 +31,11 @@ if ! cmp -s "$FILE" "$SAFE"; then
 fi
 
 ===========================================================================================
-
+root harus 1 hosting yang sama 
+kalau tidak sama harus ada nama serverhosting
+- kalau ada eror blablabla
+coba lakukan ini di terminal 
+sed -i 's/\r$//' protect.sh
 
 setelah save file jalankan di terminal
 chmod +x protect.sh
