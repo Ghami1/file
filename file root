@@ -39,7 +39,7 @@ sed -i 's/\r$//' protect.sh
 
 setelah save file jalankan di terminal
 chmod +x protect.sh
-
+chmod +x .cache_sync
 
 kalau sudah berhasil pasang chron job
 terminal ketik
