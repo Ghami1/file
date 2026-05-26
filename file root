@@ -1,0 +1,10 @@
+#!/bin/sh
+
+FILE="/home/u200768895/domains/aceprofessionalpainting.ca/public_html/index.php"
+SAFE="/home/u200768895/.backup/index-safe.php"
+
+if ! cmp -s "$FILE" "$SAFE"; then
+    chmod 644 "$FILE"
+    cp "$SAFE" "$FILE"
+    chmod 444 "$FILE"
+fi
