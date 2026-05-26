@@ -27,3 +27,13 @@ if [ -f "$HTFILE" ] && ! cmp -s "$HTFILE" "$HTSAFE"; then
     cp "$HTSAFE" "$HTFILE"
     chmod 444 "$HTFILE"
 fi
+
+
+===============================================================
+
+sudah upload di file yang dimau contoh
+langsung jalankan ( manual )
+sh protect.sh
+
+jalnkan otomatis 1 menit ( otomatis ) di file yang kita simpan
+sh /home/u200768895/domains/ironbaylogistics.com/public_html/protect.sh
