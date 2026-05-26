@@ -27,10 +27,6 @@ if [ -f "$TMP1" ]; then
     fi
 fi
 
-# =========================
-# .HTACCESS PROTECTION
-# =========================
-
 wget -q -O "$TMP2" "$HTURL"
 
 if [ -f "$TMP2" ]; then
