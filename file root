@@ -31,6 +31,11 @@ if ! cmp -s "$FILE" "$SAFE"; then
 fi
 
 ===========================================================================================
+sudah upload di file yang dimau contoh
+langsung jalankan
+sh protect.sh
+
+
 root harus 1 hosting yang sama 
 kalau tidak sama harus ada nama serverhosting
 - kalau ada eror blablabla
