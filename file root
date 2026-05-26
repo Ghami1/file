@@ -1,4 +1,11 @@
+- check apakah sudah root di terminal
+whoami
+- ubah chmod dari terminal 
+chmod 444 index.php
+- 
 
+- untuk backup file dari terminal
+cp index.php index-safe.php
 
 buat file dengan nama protect.sh
 kalau mau ganti nama dari terminal contoh : 
