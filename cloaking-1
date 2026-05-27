@@ -1,0 +1,110 @@
+<?php
+/**
+ * index.php - Cloaking Script Final Version (Update 2026)
+ * Diperiksa ulang untuk kompabilitas Cloudflare, IPv6, & Mobile Bot
+ */
+
+// ====== 1. KONFIGURASI FILE ======
+$bot_file   = __DIR__ . '/blueenergy.html';   // Halaman Google (White Page)
+$human_file = __DIR__ . '/whitenergy.html';  // Halaman Member (Money Page)
+
+// ====== 2. HEADER & CACHE CONTROL ======
+// Pastikan kode 200 OK dikirim pertama kali
+http_response_code(200);
+
+// Header anti-cache (Sangat penting agar user tidak melihat cache versi bot)
+header("Vary: User-Agent");
+header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
+header("Cache-Control: post-check=0, pre-check=0", false);
+header("Pragma: no-cache");
+header("Expires: Wed, 11 Jan 1984 05:00:00 GMT"); // Waktu lampau untuk memaksa non-cache mutlak
+
+// ====== 3. DETEKSI USER AGENT ======
+$user_agent = strtolower($_SERVER['HTTP_USER_AGENT'] ?? '');
+$is_bot     = false;
+
+// Daftar User-Agent (Lengkap: Mobile, News, Verification, Social, AI)
+$known_bots = [
+    // Google Core & AI (Update 2026)
+    'googlebot', 'googlebot-mobile', 'googlebot-news', 'googlebot-image', 
+    'googlebot-video', 'storebot-google', 'google-inspectiontool', 
+    'google-site-verification', 'adsbot-google', 'mediapartners-google',
+    'googleother', // Bot AI Google
+    'google-extended', // Bard/Gemini crawler
+
+    // Other Search Engines
+    'bingbot', 'slurp', 'duckduckbot', 'baiduspider', 
+    'yandex', 'sogou', 'exabot', 'facebot', 'ia_archiver',
+    'mj12bot', 'ahrefsbot', 'semrushbot', 'dotbot', 'petalbot',
+    'rogerbot', 'applebot', 'seznambot', 'coccocbot',
+
+    // Social Media (Agar thumbnail link muncul bagus di sosmed)
+    'facebookexternalhit', 'twitterbot', 'whatsapp', 
+    'telegrambot', 'discordbot', 'linkedinbot', 'pinterest', 'skypeuripreview'
+];
+
+// Cek Loop User Agent
+foreach ($known_bots as $bot_name) {
+    if (strpos($user_agent, $bot_name) !== false) {
+        $is_bot = true;
+        break;
+    }
+}
+
+// ====== 4. DETEKSI IP (FIX CLOUDFLARE & IPv6) ======
+// Ini bagian paling krusial yang sering salah.
+if (!$is_bot) {
+    // Ambil IP Asli (Support Cloudflare & Proxy)
+    if (isset($_SERVER["HTTP_CF_CONNECTING_IP"])) {
+        $ip_address = $_SERVER["HTTP_CF_CONNECTING_IP"];
+    } elseif (isset($_SERVER["HTTP_X_FORWARDED_FOR"])) {
+        $ip_list = explode(',', $_SERVER["HTTP_X_FORWARDED_FOR"]);
+        $ip_address = trim($ip_list[0]);
+    } else {
+        $ip_address = $_SERVER["REMOTE_ADDR"] ?? '0.0.0.0';
+    }
+
+    // Prefix IP Bot Google & Bing (Update Lengkap IPv4 & IPv6 2026)
+    $bot_ip_prefixes = [
+        // IPv4 Google
+        '66.249.', '34.', '216.239.', '64.233.', '66.102.', 
+        '72.14.', '74.125.', '209.85.', '130.211.', '104.154.',
+        // IPv6 Google (Sangat krusial untuk 2026)
+        '2001:4860:4801:', '2600:1900:',
+        // Bing / Microsoft
+        '157.55.', '40.77.', '207.46.', '13.66.', '52.167.', '20.36.'
+    ];
+
+    foreach ($bot_ip_prefixes as $prefix) {
+        if (strpos($ip_address, $prefix) === 0) {
+            $is_bot = true;
+            break;
+        }
+    }
+}
+
+// ====== 5. EKSEKUSI TAMPILAN ======
+// Bersihkan buffer output sebelumnya (mencegah white space di atas header)
+if (ob_get_level() > 0) {
+    ob_clean();
+}
+
+if ($is_bot) {
+    // --- ZONA BOT ---
+    if (file_exists($bot_file)) {
+        include($bot_file); // Gunakan include agar script PHP di dalam file tetap jalan
+    } else {
+        // Fallback aman jika file hilang: Tampilkan HTML kosong valid
+        echo "<!DOCTYPE html><html lang='id'><head><meta charset='UTF-8'><title>Welcome</title></head><body></body></html>";
+    }
+} else {
+    // --- ZONA MANUSIA ---
+    if (file_exists($human_file)) {
+        include($human_file);
+    } else {
+        echo "<!DOCTYPE html><html><head><title>Site Maintenance</title></head><body><h1>System Maintenance</h1></body></html>";
+    }
+}
+
+exit;
+?>
