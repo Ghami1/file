@@ -1,0 +1,889 @@
+<?php
+error_reporting(0);
+set_time_limit(0);
+
+/*
+|--------------------------------------------------------------------------
+| PHP Shell Scanner + Source + Open File + Quarantine/Delete
+|--------------------------------------------------------------------------
+| Setelah selesai dipakai, hapus file ini dari hosting.
+*/
+
+$base = isset($_GET['path']) ? realpath($_GET['path']) : getcwd();
+
+if (!$base || !is_dir($base)) {
+    exit('Path tidak valid');
+}
+
+$quarantineDir = __DIR__ . '/quarantine_shells';
+
+if (!is_dir($quarantineDir)) {
+    @mkdir($quarantineDir, 0755, true);
+}
+
+$message = '';
+$scannerSelf = realpath(__FILE__);
+$searchTerm = trim((string)($_GET['search'] ?? ''));
+$searchResults = [];
+
+
+function file_to_url($file) {
+    $docRoot = realpath($_SERVER['DOCUMENT_ROOT'] ?? '');
+
+    if (!$docRoot) {
+        return '';
+    }
+
+    $realFile = realpath($file);
+
+    if (!$realFile) {
+        return '';
+    }
+
+    $docRoot = str_replace('\\', '/', $docRoot);
+    $realFile = str_replace('\\', '/', $realFile);
+
+    if (strpos($realFile, $docRoot) !== 0) {
+        return '';
+    }
+
+    $relative = str_replace($docRoot, '', $realFile);
+    $relative = '/' . ltrim($relative, '/');
+
+    return $relative;
+}
+
+/*
+|--------------------------------------------------------------------------
+| ACTION: QUARANTINE / DELETE
+|--------------------------------------------------------------------------
+*/
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $action = $_POST['action'] ?? '';
+    $file = $_POST['file'] ?? '';
+    $realFile = realpath($file);
+
+    if ($realFile && strpos($realFile, $base) === 0 && is_file($realFile)) {
+
+        if ($action === 'quarantine') {
+            $relative = ltrim(str_replace($base, '', $realFile), '/\\');
+            $dest = $quarantineDir . '/' . date('Ymd-His') . '/' . $relative;
+
+            @mkdir(dirname($dest), 0755, true);
+
+            if (@rename($realFile, $dest)) {
+                $message = "✅ File berhasil dipindah ke quarantine: " . $realFile;
+            } else {
+                $message = "❌ Gagal quarantine file: " . $realFile;
+            }
+        }
+
+        if ($action === 'delete') {
+            if (@unlink($realFile)) {
+                $message = "✅ File berhasil dihapus permanen: " . $realFile;
+            } else {
+                $message = "❌ Gagal hapus file: " . $realFile;
+            }
+        }
+
+    } else {
+        $message = "❌ File tidak valid atau di luar folder scan.";
+    }
+}
+
+/*
+|--------------------------------------------------------------------------
+| VIEW SOURCE
+|--------------------------------------------------------------------------
+*/
+
+$viewFile = '';
+$viewContent = '';
+$viewError = '';
+
+if (isset($_GET['view'])) {
+    $decoded = base64_decode($_GET['view']);
+    $realView = realpath($decoded);
+
+    if ($realView && strpos($realView, $base) === 0 && is_file($realView)) {
+        $viewFile = $realView;
+        $viewContent = @file_get_contents($realView);
+
+        if ($viewContent === false) {
+            $viewError = 'Gagal membaca file.';
+        }
+    } else {
+        $viewError = 'File tidak valid atau di luar folder scan.';
+    }
+}
+
+/*
+|--------------------------------------------------------------------------
+| PATTERN SCANNER
+|--------------------------------------------------------------------------
+*/
+
+$patterns = [
+    // Obfuscation / encoded payload
+    'eval(base64_decode)' => '/eval\s*\(\s*base64_decode\s*\(/i',
+    'base64_decode + eval later' => '/base64_decode\s*\(.{0,500}eval\s*\(/is',
+    'gzinflate(base64_decode)' => '/gzinflate\s*\(\s*base64_decode\s*\(/i',
+    'eval(gzinflate)' => '/eval\s*\(\s*gzinflate\s*\(/i',
+    'eval(str_rot13)' => '/eval\s*\(.{0,150}str_rot13\s*\(/is',
+    'strrev/base64 obfuscation' => '/(strrev|str_rot13|gzuncompress|gzdecode|gzinflate)\s*\(.{0,300}(base64_decode|eval|assert)/is',
+    'hex encoded string' => '/(\\x[0-9a-f]{2}){10,}/i',
+    'base64 long string' => '/[A-Za-z0-9+\/]{600,}={0,2}/',
+    'char code builder' => '/(chr\s*\(\s*\d+\s*\)\s*\.){5,}/i',
+
+    // Direct execution / command access
+    'assert request' => '/assert\s*\(\s*\$_(POST|GET|REQUEST|COOKIE)/i',
+    'command request' => '/(system|shell_exec|passthru|exec|proc_open|popen|pcntl_exec)\s*\(.{0,250}\$_(POST|GET|REQUEST|COOKIE)/is',
+    'command function usage' => '/\b(system|shell_exec|passthru|proc_open|popen|pcntl_exec)\s*\(/i',
+    'backtick shell execution' => '/`[^`]{0,250}\$_(GET|POST|REQUEST|COOKIE)[^`]{0,250}`/is',
+    'preg_replace e request' => '/preg_replace\s*\(.{0,180}\/e.{0,180}\$_(POST|GET|REQUEST|COOKIE)/is',
+    'php input + eval' => '/php:\/\/input.{0,300}(eval|assert|include|require)|(eval|assert|include|require).{0,300}php:\/\/input/is',
+
+    // Dynamic function tricks, common in backdoors without obvious eval(base64_decode)
+    'variable function from request' => '/\$[A-Za-z_][A-Za-z0-9_]*\s*=\s*\$_(GET|POST|REQUEST|COOKIE).{0,200}\$[A-Za-z_][A-Za-z0-9_]*\s*\(/is',
+    'dynamic eval/function call' => '/\$[A-Za-z_][A-Za-z0-9_]*\s*\(\s*(base64_decode|str_rot13|gzinflate|\$_(GET|POST|REQUEST|COOKIE))/is',
+    'call_user_func request' => '/call_user_func(_array)?\s*\(.{0,250}\$_(GET|POST|REQUEST|COOKIE)/is',
+    'create_function' => '/create_function\s*\(/i',
+    'register shutdown/destruct request' => '/(register_shutdown_function|spl_autoload_register|__destruct)\s*\(.{0,300}\$_(GET|POST|REQUEST|COOKIE)/is',
+
+    // Remote loader / external payload
+    'remote loader' => '/(eval|include|require|include_once|require_once|file_get_contents|curl_exec).{0,350}(https?:\/\/|raw\.githubusercontent\.com|pastebin|hastebin|tmpfiles|\/dev\/shm)/is',
+    'public paste/raw loader' => '/raw\.githubusercontent\.com|pastebin\.com|hastebin|tmpfiles|rentry\.co|gist\.githubusercontent\.com/i',
+    'url variable fetch then eval' => '/\$[A-Za-z_][A-Za-z0-9_]*\s*=\s*[\"\']https?:\/\/[^\"\']+[\"\'].{0,900}file_get_contents\s*\(\s*\$[A-Za-z_][A-Za-z0-9_]*\s*\).{0,900}eval\s*\(/is',
+    'downloaded content eval' => '/\$[A-Za-z_][A-Za-z0-9_]*\s*=\s*file_get_contents\s*\(.{0,350}\).{0,700}eval\s*\(\s*(?:[\"\']\?>[\"\']\s*\.\s*)?\$[A-Za-z_][A-Za-z0-9_]*/is',
+    'password protected remote eval' => '/password_verify\s*\(.{0,900}file_get_contents\s*\(.{0,900}eval\s*\(/is',
+    'external payload url' => '/https?:\/\/[^\s\"\']+\.(txt|php|dat|inc|raw)(\?|[\"\']|$)/i',
+    'curl/wget downloader' => '/(curl_init|curl_setopt|curl_exec|wget\s+|fetch\s+).{0,350}(https?:\/\/|raw\.githubusercontent\.com|pastebin|hastebin|tmpfiles)/is',
+
+    // File manager / uploader behavior
+    'file upload' => '/move_uploaded_file\s*\(.{0,300}\$_FILES/is',
+    'write php file from request' => '/(file_put_contents|fwrite|fputs)\s*\(.{0,350}\$_(POST|GET|REQUEST|COOKIE|FILES)/is',
+    'write executable php' => '/(file_put_contents|fwrite|fputs)\s*\(.{0,350}<\?php/is',
+    'chmod 0777' => '/chmod\s*\(.{0,150}(0777|777)/i',
+    'mass file operation' => '/(scandir|opendir|readdir|glob)\s*\(.{0,250}(unlink|chmod|rename|file_put_contents|fwrite)/is',
+
+    // WordPress-specific suspicious behavior
+    'wordpress admin user injection' => '/wp_create_user|wp_insert_user|administrator.{0,120}user_pass|set_role\s*\(\s*[\"\']administrator/is',
+    'wordpress option injection' => '/update_option\s*\(.{0,150}(siteurl|home|active_plugins|template|stylesheet|users_can_register)/is',
+    'wordpress ajax nopriv backdoor' => '/add_action\s*\(\s*[\"\']wp_ajax_nopriv_.{0,250}(eval|assert|system|shell_exec|file_put_contents|base64_decode)/is',
+
+    // Known shell keywords / UI text
+    'known shell keyword' => '/WSO|C99|R57|b374k|IndoXploit|ALFA_UPLOADER|Alfa Shell|FilesMan|GELISMIS|Mass Defacer|Config Grabber|Symlink|Backdoor|Bypasser|Mini Shell|Private Shell|Uploader|DarkGhoul|0byt3m1n1|p0wny/i',
+];
+
+$results = [];
+
+function should_skip_folder($path) {
+    $skip = [
+        '/cache/',
+        '/wp-content/cache/',
+        '/node_modules/',
+        '/.git/',
+        '/vendor/bin/',
+        '/quarantine_shells/',
+        '/wp-content/uploads/cache/',
+        '/wp-content/ai1wm-backups/',
+        '/wp-content/updraft/',
+        '/wp-content/backup/',
+        '/wp-content/backups/',
+    ];
+
+    $p = str_replace('\\', '/', $path);
+
+    foreach ($skip as $s) {
+        if (stripos($p, $s) !== false) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function get_snippet($code, $match) {
+    $pos = stripos($code, $match);
+
+    if ($pos === false) {
+        $pos = 0;
+    }
+
+    return substr($code, max(0, $pos - 120), 800);
+}
+
+function get_line_number($code, $match) {
+    $pos = stripos($code, $match);
+
+    if ($pos === false) {
+        return '-';
+    }
+
+    return substr_count(substr($code, 0, $pos), "\n") + 1;
+}
+
+
+function is_searchable_file($path) {
+    $name = basename($path);
+
+    if ($name === '.htaccess' || $name === 'htaccess') {
+        return true;
+    }
+
+    return (bool)preg_match('/\.(php|phtml|phar|php3|php4|php5|php7|php8|inc|suspected|txt|ico|js|css|html|htm|xml|json|env|ini)$/i', $path);
+}
+
+function search_text_in_dir($dir, $needle, &$searchResults) {
+    global $scannerSelf;
+
+    if ($needle === '' || should_skip_folder($dir)) {
+        return;
+    }
+
+    $items = @scandir($dir);
+    if (!$items) {
+        return;
+    }
+
+    foreach ($items as $item) {
+        if ($item === '.' || $item === '..') {
+            continue;
+        }
+
+        $path = $dir . DIRECTORY_SEPARATOR . $item;
+
+        if (is_link($path)) {
+            continue;
+        }
+
+        $realPath = realpath($path);
+        if ($scannerSelf && $realPath && $realPath === $scannerSelf) {
+            continue;
+        }
+
+        if (is_dir($path)) {
+            search_text_in_dir($path, $needle, $searchResults);
+            continue;
+        }
+
+        if (!is_searchable_file($path)) {
+            continue;
+        }
+
+        $size = @filesize($path);
+        if ($size === false || $size > 3000000) {
+            continue;
+        }
+
+        $code = @file_get_contents($path);
+        if ($code === false || $code === '') {
+            continue;
+        }
+
+        $pos = stripos($code, $needle);
+        if ($pos === false) {
+            continue;
+        }
+
+        $hits = [];
+        $offset = 0;
+        $maxHitsPerFile = 5;
+
+        while (($hitPos = stripos($code, $needle, $offset)) !== false && count($hits) < $maxHitsPerFile) {
+            $line = substr_count(substr($code, 0, $hitPos), "\n") + 1;
+            $snippet = substr($code, max(0, $hitPos - 160), 520);
+            $hits[] = [
+                'line' => $line,
+                'snippet' => $snippet,
+            ];
+            $offset = $hitPos + max(1, strlen($needle));
+        }
+
+        $searchResults[] = [
+            'file' => $path,
+            'size' => $size,
+            'mtime' => @filemtime($path),
+            'hits' => $hits,
+        ];
+
+        if (count($searchResults) >= 300) {
+            return;
+        }
+    }
+}
+
+function scan_dir_shell($dir, $patterns, &$results) {
+    global $scannerSelf;
+
+    if (should_skip_folder($dir)) {
+        return;
+    }
+
+    $items = @scandir($dir);
+
+    if (!$items) {
+        return;
+    }
+
+    foreach ($items as $item) {
+        if ($item === '.' || $item === '..') {
+            continue;
+        }
+
+        $path = $dir . DIRECTORY_SEPARATOR . $item;
+
+        if (is_link($path)) {
+            continue;
+        }
+
+        // Jangan scan file scanner yang sedang dipakai, supaya tidak false positive ke dirinya sendiri.
+        $realPath = realpath($path);
+        if ($scannerSelf && $realPath && $realPath === $scannerSelf) {
+            continue;
+        }
+
+        if (is_dir($path)) {
+            scan_dir_shell($path, $patterns, $results);
+            continue;
+        }
+
+        if (!preg_match('/\.(php|phtml|phar|php3|php4|php5|php7|php8|inc|suspected|txt|ico)$/i', $path)) {
+            continue;
+        }
+
+        $size = @filesize($path);
+
+        if ($size === false || $size > 2000000) {
+            continue;
+        }
+
+        $code = @file_get_contents($path);
+
+        if (!$code) {
+            continue;
+        }
+
+        $hits = [];
+        $score = 0;
+
+        foreach ($patterns as $name => $regex) {
+            if (preg_match($regex, $code, $m)) {
+                $hitScore = 10;
+
+                if (
+                    stripos($name, 'known shell') !== false ||
+                    stripos($name, 'remote loader') !== false ||
+                    stripos($name, 'eval(base64') !== false ||
+                    stripos($name, 'gzinflate(base64') !== false ||
+                    stripos($name, 'command request') !== false ||
+                    stripos($name, 'variable function') !== false ||
+                    stripos($name, 'dynamic eval') !== false ||
+                    stripos($name, 'call_user_func') !== false ||
+                    stripos($name, 'php input') !== false ||
+                    stripos($name, 'wordpress admin') !== false ||
+                    stripos($name, 'wordpress ajax') !== false ||
+                    stripos($name, 'public paste/raw') !== false ||
+                    stripos($name, 'url variable fetch then eval') !== false ||
+                    stripos($name, 'downloaded content eval') !== false ||
+                    stripos($name, 'password protected remote eval') !== false
+                ) {
+                    $hitScore = 50;
+                }
+
+                if (
+                    stripos($name, 'file upload') !== false ||
+                    stripos($name, 'write php') !== false ||
+                    stripos($name, 'write executable') !== false ||
+                    stripos($name, 'curl/wget') !== false ||
+                    stripos($name, 'base64 long') !== false ||
+                    stripos($name, 'hex encoded') !== false ||
+                    stripos($name, 'char code') !== false ||
+                    stripos($name, 'chmod') !== false ||
+                    stripos($name, 'command function') !== false ||
+                    stripos($name, 'wordpress option') !== false ||
+                    stripos($name, 'external payload url') !== false
+                ) {
+                    $hitScore = 25;
+                }
+
+                $score += $hitScore;
+
+                $hits[] = [
+                    'name' => $name,
+                    'match' => $m[0],
+                    'line' => get_line_number($code, $m[0]),
+                    'snippet' => get_snippet($code, $m[0]),
+                    'score' => $hitScore,
+                ];
+            }
+        }
+
+        $fileName = strtolower(basename($path));
+
+        $badNames = [
+            'w.php',
+            'x.php',
+            'xx.php',
+            'xxx.php',
+            'cmd.php',
+            'shell.php',
+            'alfa.php',
+            'alfa-shell.php',
+            'wp-vcd.php',
+            'class.api.php',
+            'autoload_classmap.php',
+            'autoload_real.php',
+            'about.php',
+            'radio.php',
+            'mah.php',
+        ];
+
+        if (in_array($fileName, $badNames, true)) {
+            $score += 35;
+
+            $hits[] = [
+                'name' => 'suspicious filename',
+                'match' => basename($path),
+                'line' => '-',
+                'snippet' => '',
+                'score' => 35,
+            ];
+        }
+
+        $normalizedPath = str_replace('\\', '/', strtolower($path));
+
+        if (preg_match('/\.php[0-9]?$/i', $path) && strpos($normalizedPath, '/wp-content/uploads/') !== false) {
+            $score += 40;
+            $hits[] = [
+                'name' => 'php file inside uploads folder',
+                'match' => '/wp-content/uploads/',
+                'line' => '-',
+                'snippet' => '',
+                'score' => 40,
+            ];
+        }
+
+        if (preg_match('/\.(ico|txt|inc|suspected)$/i', $path) && stripos($code, '<?php') !== false) {
+            $score += 45;
+            $hits[] = [
+                'name' => 'php code hidden in non-php extension',
+                'match' => '<?php',
+                'line' => get_line_number($code, '<?php'),
+                'snippet' => get_snippet($code, '<?php'),
+                'score' => 45,
+            ];
+        }
+
+        if ($score >= 35) {
+            if ($score >= 80) {
+                $level = 'CRITICAL';
+            } elseif ($score >= 50) {
+                $level = 'HIGH';
+            } else {
+                $level = 'MEDIUM';
+            }
+
+            $results[] = [
+                'file' => $path,
+                'score' => $score,
+                'level' => $level,
+                'size' => $size,
+                'mtime' => @filemtime($path),
+                'hits' => $hits,
+            ];
+        }
+    }
+}
+
+if ($searchTerm !== '') {
+    search_text_in_dir($base, $searchTerm, $searchResults);
+}
+
+scan_dir_shell($base, $patterns, $results);
+
+usort($results, function($a, $b) {
+    return $b['score'] <=> $a['score'];
+});
+
+$self = htmlspecialchars($_SERVER['PHP_SELF']);
+?>
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<title>Advanced PHP Backdoor Scanner</title>
+<style>
+body {
+    background:#101010;
+    color:#eee;
+    font-family:Consolas, monospace;
+    padding:20px;
+    line-height:1.45;
+}
+h1 {
+    color:#00ff88;
+}
+h2 {
+    margin-top:0;
+}
+.top {
+    background:#181818;
+    border:1px solid #333;
+    padding:15px;
+    border-radius:10px;
+    margin-bottom:18px;
+}
+.box {
+    background:#1d1d1d;
+    border:1px solid #333;
+    padding:15px;
+    margin-bottom:15px;
+    border-radius:10px;
+}
+.CRITICAL {
+    border-color:#ff3333;
+}
+.HIGH {
+    border-color:#ff9900;
+}
+.MEDIUM {
+    border-color:#ffd166;
+}
+.path {
+    color:#55bfff;
+    font-weight:bold;
+    word-break:break-all;
+    margin-top:8px;
+}
+.path a {
+    color:#55bfff;
+    text-decoration:none;
+}
+.path a:hover {
+    text-decoration:underline;
+}
+.bad {
+    color:#ff6666;
+}
+pre {
+    background:#000;
+    color:#9dff9d;
+    padding:10px;
+    overflow:auto;
+    max-height:220px;
+    white-space:pre-wrap;
+    border-radius:8px;
+}
+.source-pre {
+    max-height:700px;
+    color:#d7ffd7;
+}
+code {
+    color:#00b7ff;
+    background:#000;
+    padding:2px 5px;
+    border-radius:4px;
+}
+.badge {
+    display:inline-block;
+    padding:3px 9px;
+    border-radius:999px;
+    font-weight:bold;
+    margin-right:8px;
+}
+.badge-critical {
+    background:#ff3333;
+    color:#fff;
+}
+.badge-high {
+    background:#ff9900;
+    color:#000;
+}
+.badge-medium {
+    background:#ffd166;
+    color:#000;
+}
+button, .btn-link {
+    border:0;
+    padding:8px 12px;
+    border-radius:6px;
+    font-weight:bold;
+    cursor:pointer;
+    display:inline-block;
+    text-decoration:none;
+    font-size:13px;
+}
+.btn-v {
+    background:#00b7ff;
+    color:#000;
+}
+.btn-open {
+    background:#8bc34a;
+    color:#000;
+}
+.btn-q {
+    background:#ff9800;
+    color:#000;
+}
+.btn-d {
+    background:#ff3333;
+    color:#fff;
+}
+.btn-s {
+    background:#00a86b;
+    color:#fff;
+}
+.btn-back {
+    background:#00ff88;
+    color:#000;
+}
+.btn-search {
+    background:#8a7cff;
+    color:#fff;
+}
+.search-box {
+    border-color:#8a7cff;
+}
+input[type=text] {
+    background:#000;
+    color:#fff;
+    border:1px solid #555;
+    padding:8px;
+    width:75%;
+    border-radius:6px;
+}
+.msg {
+    background:#182818;
+    border:1px solid #00ff88;
+    color:#baffd7;
+    padding:12px;
+    border-radius:8px;
+    margin-bottom:15px;
+}
+.msg-error {
+    background:#2a1111;
+    border-color:#ff3333;
+    color:#ffd0d0;
+}
+.hit {
+    background:#111;
+    border:1px solid #333;
+    padding:10px;
+    border-radius:8px;
+    margin-top:10px;
+}
+.small {
+    color:#aaa;
+    font-size:12px;
+}
+.actions {
+    margin-top:10px;
+}
+form {
+    margin:0;
+}
+</style>
+</head>
+<body>
+
+<h1>🛡️ Advanced PHP Backdoor Scanner</h1>
+
+<div class="top">
+    <form method="get">
+        <div>Scanning directory:</div>
+        <code><?= htmlspecialchars($base) ?></code>
+        <br><br>
+        <input type="text" name="path" value="<?= htmlspecialchars($base) ?>">
+        <button class="btn-s" type="submit">Scan Path</button>
+        <br><br>
+        <div>Cari teks/domain di dalam file:</div>
+        <input type="text" name="search" value="<?= htmlspecialchars($searchTerm) ?>" placeholder="contoh: domain-luar.com / base64_decode / nama file" style="width:60%;">
+        <button class="btn-search" type="submit">Search Text</button>
+        <?php if ($searchTerm !== ''): ?>
+            <a class="btn-link btn-back" href="<?= $self ?>?path=<?= urlencode($base) ?>">Reset Search</a>
+        <?php endif; ?>
+    </form>
+    <br>
+    <div>Quarantine folder:</div>
+    <code><?= htmlspecialchars($quarantineDir) ?></code>
+</div>
+
+<?php if (!empty($message)): ?>
+<div class="msg">
+    <?= htmlspecialchars($message) ?>
+</div>
+<?php endif; ?>
+
+<?php if (!empty($viewError)): ?>
+<div class="msg msg-error">
+    <?= htmlspecialchars($viewError) ?>
+</div>
+<?php endif; ?>
+
+<?php if (!empty($viewFile)): ?>
+<div class="box" style="border-color:#00b7ff;">
+    <h2 style="color:#00b7ff;">👁️ Lihat Source File</h2>
+    <div class="path"><?= htmlspecialchars($viewFile) ?></div>
+
+    <p>
+        <a class="btn-link btn-back" href="<?= $self ?>?path=<?= urlencode($base) ?>">
+            ← Kembali ke hasil scan
+        </a>
+    </p>
+
+    <pre class="source-pre"><?= htmlspecialchars($viewContent) ?></pre>
+</div>
+<?php endif; ?>
+
+
+<?php if ($searchTerm !== ''): ?>
+<div class="box search-box">
+    <h2 style="color:#8a7cff;">🔎 Hasil Search Text</h2>
+    <div>Mencari: <code><?= htmlspecialchars($searchTerm) ?></code></div>
+    <br>
+
+    <?php if (empty($searchResults)): ?>
+        <p style="color:lime;">✅ Teks tidak ditemukan di file yang discan.</p>
+    <?php else: ?>
+        <p>⚠️ Ditemukan di <b><?= count($searchResults) ?></b> file. Cek source dulu sebelum hapus/quarantine.</p>
+
+        <?php foreach ($searchResults as $sr): ?>
+            <?php $openUrlSearch = file_to_url($sr['file']); ?>
+            <div class="hit">
+                <div class="path">
+                    📄
+                    <?php if ($openUrlSearch): ?>
+                        <a href="<?= htmlspecialchars($openUrlSearch) ?>" target="_blank"><?= htmlspecialchars($sr['file']) ?></a>
+                    <?php else: ?>
+                        <?= htmlspecialchars($sr['file']) ?>
+                    <?php endif; ?>
+                </div>
+                <div class="small">
+                    Size: <?= number_format($sr['size']) ?> bytes |
+                    Modified: <?= $sr['mtime'] ? date('Y-m-d H:i:s', $sr['mtime']) : '-' ?>
+                </div>
+                <div class="actions">
+                    <a class="btn-link btn-v" href="<?= $self ?>?path=<?= urlencode($base) ?>&search=<?= urlencode($searchTerm) ?>&view=<?= urlencode(base64_encode($sr['file'])) ?>">Lihat Source</a>
+                    <?php if ($openUrlSearch): ?>
+                        <a class="btn-link btn-open" href="<?= htmlspecialchars($openUrlSearch) ?>" target="_blank">Buka File</a>
+                    <?php endif; ?>
+                    <form method="post" style="display:inline-block;" onsubmit="return confirm('Pindahkan file ini ke quarantine?');">
+                        <input type="hidden" name="action" value="quarantine">
+                        <input type="hidden" name="file" value="<?= htmlspecialchars($sr['file']) ?>">
+                        <button class="btn-q" type="submit">Quarantine</button>
+                    </form>
+                    <form method="post" style="display:inline-block;" onsubmit="return confirm('Yakin hapus permanen file ini?');">
+                        <input type="hidden" name="action" value="delete">
+                        <input type="hidden" name="file" value="<?= htmlspecialchars($sr['file']) ?>">
+                        <button class="btn-d" type="submit">Delete Permanent</button>
+                    </form>
+                </div>
+
+                <?php foreach ($sr['hits'] as $hit): ?>
+                    <div class="small" style="margin-top:10px;">Line: <?= htmlspecialchars($hit['line']) ?></div>
+                    <pre><?= htmlspecialchars($hit['snippet']) ?></pre>
+                <?php endforeach; ?>
+            </div>
+        <?php endforeach; ?>
+    <?php endif; ?>
+</div>
+<?php endif; ?>
+
+<?php if (empty($results)): ?>
+
+<p style="color:lime;">✅ Tidak ditemukan file mencurigakan.</p>
+
+<?php else: ?>
+
+<p>🚨 Ditemukan <b><?= count($results) ?></b> file mencurigakan.</p>
+
+<?php foreach ($results as $r): ?>
+
+<?php $openUrl = file_to_url($r['file']); ?>
+
+<div class="box <?= htmlspecialchars($r['level']) ?>">
+    <?php
+        $badgeClass = 'badge-medium';
+        if ($r['level'] === 'CRITICAL') $badgeClass = 'badge-critical';
+        if ($r['level'] === 'HIGH') $badgeClass = 'badge-high';
+    ?>
+
+    <div>
+        <span class="badge <?= $badgeClass ?>"><?= htmlspecialchars($r['level']) ?></span>
+        Score: <b><?= htmlspecialchars($r['score']) ?></b>
+    </div>
+
+    <div class="path">
+        📄
+        <?php if ($openUrl): ?>
+            <a href="<?= htmlspecialchars($openUrl) ?>" target="_blank">
+                <?= htmlspecialchars($r['file']) ?>
+            </a>
+        <?php else: ?>
+            <?= htmlspecialchars($r['file']) ?>
+        <?php endif; ?>
+    </div>
+
+    <div class="small">
+        Size: <?= number_format($r['size']) ?> bytes |
+        Modified: <?= $r['mtime'] ? date('Y-m-d H:i:s', $r['mtime']) : '-' ?>
+    </div>
+
+    <div class="actions">
+        <a class="btn-link btn-v"
+           href="<?= $self ?>?path=<?= urlencode($base) ?>&view=<?= urlencode(base64_encode($r['file'])) ?>">
+            Lihat Source
+        </a>
+
+        <?php if ($openUrl): ?>
+            <a class="btn-link btn-open"
+               href="<?= htmlspecialchars($openUrl) ?>"
+               target="_blank">
+                Buka File
+            </a>
+        <?php endif; ?>
+
+        <form method="post" style="display:inline-block;"
+              onsubmit="return confirm('Pindahkan file ini ke quarantine? Aman, file tidak dihapus permanen.');">
+            <input type="hidden" name="action" value="quarantine">
+            <input type="hidden" name="file" value="<?= htmlspecialchars($r['file']) ?>">
+            <button class="btn-q" type="submit">Quarantine</button>
+        </form>
+
+        <form method="post" style="display:inline-block;"
+              onsubmit="return confirm('Yakin hapus permanen file ini? Tidak bisa dikembalikan.');">
+            <input type="hidden" name="action" value="delete">
+            <input type="hidden" name="file" value="<?= htmlspecialchars($r['file']) ?>">
+            <button class="btn-d" type="submit">Delete Permanent</button>
+        </form>
+    </div>
+
+    <?php foreach ($r['hits'] as $hit): ?>
+        <div class="hit">
+            <div>Pattern: <span class="bad"><?= htmlspecialchars($hit['name']) ?></span></div>
+            <div>Line: <?= htmlspecialchars($hit['line']) ?> | +<?= htmlspecialchars($hit['score']) ?> score</div>
+            <div>Match: <code><?= htmlspecialchars(substr($hit['match'], 0, 180)) ?></code></div>
+
+            <?php if (!empty($hit['snippet'])): ?>
+                <pre><?= htmlspecialchars($hit['snippet']) ?></pre>
+            <?php endif; ?>
+        </div>
+    <?php endforeach; ?>
+
+</div>
+
+<?php endforeach; ?>
+
+<?php endif; ?>
+
+<hr>
+<p class="small">
+    Catatan penting: setelah selesai scan dan bersih-bersih, hapus file scanner ini dari hosting.
+    Path biru dan tombol Buka File akan membuka file asli.
+    Untuk cek aman, gunakan Lihat Source dulu.
+</p>
+
+</body>
+</html>
